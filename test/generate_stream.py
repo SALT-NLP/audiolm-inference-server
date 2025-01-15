@@ -47,7 +47,7 @@ def two_turn(audio_url_or_paths: List[str], model_name: str, stream=True):
                 "content": [
                     {
                         "type": "text",
-                        "text": "Stanford University is located in Palo Alto, California.",
+                        "text": "Stanford University is located in Stanford, California, United States.",
                     },
                 ],
             },
@@ -67,9 +67,13 @@ def two_turn(audio_url_or_paths: List[str], model_name: str, stream=True):
         stream=stream,
         temperature=0,
     )
+    response = ""
     for output in chat_completion_from_url:
         if len(output.choices) > 0:
-            print(output.choices[0].delta.content)
+            response += output.choices[0].delta.content
+    assert (
+        response == "What city is Stanford University located in?"
+    ), f"Actual Response was {response}"
 
 
 def single_turn(audio_url_or_path: str, model_name: str, stream=True):
@@ -80,30 +84,45 @@ def single_turn(audio_url_or_path: str, model_name: str, stream=True):
     chat_completion_from_url = client.chat.completions.create(
         messages=[
             {
-                "role": "user",
+                "role": "system",
                 "content": [
                     {
                         "type": "text",
                         "text": "You are a helpful assistant. Respond conversationally to the speech provided.",
                     },
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
                     {
                         "type": "audio",
                         "audio_url": "data:audio/wav;base64,"
                         + encode_audio_base64_from_url(audio_url_or_path),
                     },
                 ],
-            }
+            },
         ],
         model=model_name,
         max_tokens=64,
         stream=stream,
         temperature=0,
     )
+    response = ""
     for output in chat_completion_from_url:
         if len(output.choices) > 0:
-            print(output.choices[0].delta.content)
+            response += output.choices[0].delta.content
+    assert (
+        response
+        == "Stanford University is located in Stanford, California, United States."
+    ), f"Actual Response was {response}"
 
 
 if __name__ == "__main__":
-    single_turn(audio_url_or_path="test/tmp-20240801-035414.wav", model_name="t")
-    two_turn(audio_url_or_paths=["test/turn1.mp3", "test/turn2.mp3"], model_name="t")
+    single_turn(
+        audio_url_or_path="test/turn1.mp3", model_name="WillHeld/DiVA-llama-3-v0-8b"
+    )
+    two_turn(
+        audio_url_or_paths=["test/turn1.mp3", "test/turn2.mp3"],
+        model_name="WillHeld/DiVA-llama-3-v0-8b",
+    )
