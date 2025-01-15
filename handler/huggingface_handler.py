@@ -1,4 +1,5 @@
 import time
+import xxhash
 from fastapi.responses import StreamingResponse
 import librosa
 import numpy as np
@@ -16,10 +17,12 @@ from utils import get_either, get_file_from_any
 
 
 class HuggingfaceHandler(BaseHandler):
-
     def __init__(self, model_name: str, sample_rate=16000):
         super().__init__(model_name)
-        self.model = AutoModel.from_pretrained(model_name, trust_remote_code=True).to('cuda')
+        self.prev_outs_cache = {}
+        self.model = AutoModel.from_pretrained(
+            model_name, trust_remote_code=True, device_map="balanced_low_0"
+        )
         self.sample_rate = sample_rate
 
     @torch.no_grad()
@@ -40,7 +43,16 @@ class HuggingfaceHandler(BaseHandler):
             },
         }
 
-        y, sr = inputs["multi_modal_data"]["audio"][0]
+        prev_outs = None
+        if len(inputs["multi_modal_data"]["audio"]) > 1:
+            y, sr = inputs["multi_modal_data"]["audio"][-2]
+            prev_hash = xxhash.xxh32(bytes(y)).hexdigest()
+            prev_outs = self.prev_outs_cache
+
+        y, sr = inputs["multi_modal_data"]["audio"][-1]
+        curr_hash = xxhash.xxh32(bytes(y)).hexdigest()
+        print("Curr Hash")
+        print(curr_hash)
         assert sr == self.sample_rate
         y = y.astype(np.float32)
         y /= np.max(np.abs(y))
@@ -48,19 +60,23 @@ class HuggingfaceHandler(BaseHandler):
         results_generator = self.model.generate_stream(
             y,
             (
-                "You are a helpful assistant The user is talking to you with their voice and you are responding with"
-                " text."
+                "You are a voice assistant. Your interface with users will be voice. You should use short and concise responses. You should tailor your response style to speech using spelled out numbers and avoiding all formatting except for standard punctuation."
+                if prev_outs == None
+                else None
             ),
             do_sample=request.temperature > 0.005,
             max_new_tokens=get_either(
                 [request.max_completion_tokens, request.max_tokens]
             ),
+            init_outputs=prev_outs,
+            return_outputs=True,
         )
 
         # Streaming case
+        @torch.no_grad()
         def stream_results():
             prev_output = ""
-            for text_output in results_generator:
+            for text_output, outs in results_generator:
                 delta_text = text_output[len(prev_output) :]
                 finish_reason = None
                 if delta_text == "":
@@ -85,9 +101,10 @@ class HuggingfaceHandler(BaseHandler):
                 data = chunk.model_dump_json(exclude_unset=True)
                 yield f"data: {data}\n\n"
                 prev_output = text_output
+            self.prev_outs_cache = outs
             choice_data = ChatCompletionResponseStreamChoice(
                 index=0,
-                delta=DeltaMessage(content=''),
+                delta=DeltaMessage(content=""),
                 logprobs=None,
                 finish_reason=finish_reason,
             )
