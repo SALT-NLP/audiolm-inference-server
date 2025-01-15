@@ -58,6 +58,7 @@ class HuggingfaceHandler(BaseHandler):
         )
 
         # Streaming case
+        @torch.no_grad()
         def stream_results():
             prev_output = ""
             for text_output in results_generator:
@@ -87,7 +88,7 @@ class HuggingfaceHandler(BaseHandler):
                 prev_output = text_output
             choice_data = ChatCompletionResponseStreamChoice(
                 index=0,
-                delta=DeltaMessage(content=''),
+                delta=DeltaMessage(content=""),
                 logprobs=None,
                 finish_reason=finish_reason,
             )

@@ -1,6 +1,8 @@
 import base64
 from openai import OpenAI
 import requests
+from typing import List
+
 
 def encode_audio_base64_from_url(url_or_path: str) -> str:
     """Encode an audio retrieved from a remote url to base64 format."""
@@ -13,10 +15,67 @@ def encode_audio_base64_from_url(url_or_path: str) -> str:
             result = base64.b64encode(wav_file.read()).decode("utf-8")
     return result
 
-def main(audio_url_or_path: str, model_name: str, stream=True):
+
+def two_turn(audio_url_or_paths: List[str], model_name: str, stream=True):
     client = OpenAI(
-        base_url="http://localhost:8000/v1",
-        api_key="aabb",
+        base_url="http://localhost:40021/v1",
+        api_key="None",
+    )
+    chat_completion_from_url = client.chat.completions.create(
+        messages=[
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "You are a helpful assistant. Respond conversationally to the speech provided.",
+                    },
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "audio",
+                        "audio_url": "data:audio/mp3;base64,"
+                        + encode_audio_base64_from_url(audio_url_or_paths[0]),
+                    },
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Stanford University is located in Palo Alto, California.",
+                    },
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "audio",
+                        "audio_url": "data:audio/mp3;base64,"
+                        + encode_audio_base64_from_url(audio_url_or_paths[1]),
+                    },
+                ],
+            },
+        ],
+        model=model_name,
+        max_tokens=64,
+        stream=stream,
+        temperature=0,
+    )
+    for output in chat_completion_from_url:
+        if len(output.choices) > 0:
+            print(output.choices[0].delta.content)
+
+
+def single_turn(audio_url_or_path: str, model_name: str, stream=True):
+    client = OpenAI(
+        base_url="http://localhost:40021/v1",
+        api_key="None",
     )
     chat_completion_from_url = client.chat.completions.create(
         messages=[
@@ -38,12 +97,13 @@ def main(audio_url_or_path: str, model_name: str, stream=True):
         model=model_name,
         max_tokens=64,
         stream=stream,
+        temperature=0,
     )
     for output in chat_completion_from_url:
-        print(output)
         if len(output.choices) > 0:
             print(output.choices[0].delta.content)
 
 
 if __name__ == "__main__":
-    main(audio_url_or_path="test/tmp-20240801-035414.wav", model_name="qwen-audio")
+    single_turn(audio_url_or_path="test/tmp-20240801-035414.wav", model_name="t")
+    two_turn(audio_url_or_paths=["test/turn1.mp3", "test/turn2.mp3"], model_name="t")
