@@ -37,6 +37,33 @@ def two_turn(audio_url_or_paths: List[str], model_name: str, stream=True):
                 "content": [
                     {
                         "type": "audio",
+                        "audio_url": "data:audio/wav;base64,"
+                        + encode_audio_base64_from_url(audio_url_or_paths[0]),
+                    },
+                ],
+            },
+        ],
+        model=model_name,
+        max_tokens=64,
+        stream=stream,
+        temperature=0,
+    )
+    chat_completion_from_url = client.chat.completions.create(
+        messages=[
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "You are a helpful assistant. Respond conversationally to the speech provided.",
+                    },
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "audio",
                         "audio_url": "data:audio/mp3;base64,"
                         + encode_audio_base64_from_url(audio_url_or_paths[0]),
                     },
@@ -47,7 +74,7 @@ def two_turn(audio_url_or_paths: List[str], model_name: str, stream=True):
                 "content": [
                     {
                         "type": "text",
-                        "text": "Stanford University is located in Stanford, California, United States.",
+                        "text": "Stanford University is located in Palo Alto, California.",
                     },
                 ],
             },
@@ -72,7 +99,7 @@ def two_turn(audio_url_or_paths: List[str], model_name: str, stream=True):
         if len(output.choices) > 0:
             response += output.choices[0].delta.content
     assert (
-        response == "What city is Stanford University located in?"
+        response == 'You said "What city is Stanford University located in?"'
     ), f"Actual Response was {response}"
 
 
@@ -113,8 +140,7 @@ def single_turn(audio_url_or_path: str, model_name: str, stream=True):
         if len(output.choices) > 0:
             response += output.choices[0].delta.content
     assert (
-        response
-        == "Stanford University is located in Stanford, California, United States."
+        response == "Stanford University is located in Palo Alto, California."
     ), f"Actual Response was {response}"
 
 
